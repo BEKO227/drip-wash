@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: #09090a;
+  background-image: radial-gradient(900px 380px at 50% -120px, rgba(255,122,26,.16), transparent 70%);
+  background-repeat: no-repeat;
+  color: #f4f4f5;
+  min-height: 100vh;
+}
+input:focus, button:focus-visible, a:focus-visible { outline: 2px solid #ff7a1a; outline-offset: 2px; }
+@layer components {
+  .card { @apply bg-card border border-line rounded-2xl p-4; }
+  .field { @apply w-full bg-card2 border border-line rounded-xl text-lg px-3.5 py-3; }
+  .btn { @apply w-full bg-brand text-[#1a0d00] rounded-2xl text-lg font-extrabold py-3.5 disabled:opacity-35 disabled:cursor-not-allowed; }
+  .row { @apply flex justify-between items-center gap-2.5 py-3 border-b border-line last:border-0; }
+}
+@media (prefers-reduced-motion: no-preference) { .svc { transition: border-color .15s, background .15s; } }
+
+@media print {
+  @page { margin: 12mm; }
+  body { background: #fff !important; color: #000 !important; }
+  .card, .row, th, td { background: #fff !important; border-color: #ccc !important; }
+  thead { display: table-header-group; }
+  .text-mut { color: #555 !important; }
+  .text-brand2 { color: #000 !important; }
+}

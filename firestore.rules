@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function role() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role; }
+    function isPartner() { return signedIn() && role() == 'partner'; }
+    function isWorker() { return signedIn() && role() == 'worker'; }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isPartner());
+      allow write: if false;
+    }
+    match /settings/{id} {
+      allow read: if signedIn();
+      allow write: if isPartner();
+    }
+    match /orders/{id} {
+      allow read: if isPartner() || (isWorker() && resource.data.by == request.auth.uid);
+      allow create: if (isWorker() || isPartner())
+                    && request.resource.data.by == request.auth.uid
+                    && request.resource.data.price is number
+                    && request.resource.data.price > 0;
+      allow update, delete: if false;
+    }
+  }
+}
