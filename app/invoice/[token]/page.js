@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -13,6 +13,9 @@ export default function InvoicePage() {
   const { token } = useParams();
   const [inv, setInv] = useState(undefined); // undefined = بيحمّل، null = مش موجودة
   const [noLogo, setNoLogo] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfErr, setPdfErr] = useState('');
+  const cardRef = useRef(null);
 
   useEffect(() => {
     if (!token) return;
@@ -20,6 +23,52 @@ export default function InvoicePage() {
       .then((s) => setInv(s.exists() ? s.data() : null))
       .catch((e) => { console.error(e); setInv(null); });
   }, [token]);
+
+  // بيعمل ملف PDF فعلي (بيشتغل على الموبايل) ويفتح قايمة المشاركة أو ينزّله
+  const savePdf = async () => {
+    if (!cardRef.current) return;
+    setPdfBusy(true);
+    setPdfErr('');
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas-pro'), import('jspdf')]);
+      const canvas = await html2canvas(cardRef.current, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+      const pdf = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
+      const m = 8;
+      let w = pw - m * 2;
+      let h = (canvas.height * w) / canvas.width;
+      if (h > ph - m * 2) { h = ph - m * 2; w = (canvas.width * h) / canvas.height; }
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', (pw - w) / 2, m, w, h);
+
+      const name = `invoice-${inv.no}.pdf`;
+      const blob = pdf.output('blob');
+      const file = new File([blob], name, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: `فاتورة #${inv.no}` });
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return; // المستخدم قفل القايمة
+          // أي خطأ تاني: نكمّل للتنزيل العادي
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      console.error(e);
+      setPdfErr('معرفناش نجهّز الـ PDF، جرّب تاني');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   if (inv === undefined) return <p className="p-6 text-center">جاري التحميل...</p>;
   if (inv === null) return <p className="p-6 text-center">الفاتورة غير موجودة أو الرابط غير صحيح.</p>;
@@ -34,7 +83,7 @@ export default function InvoicePage() {
         }
       `}</style>
 
-      <div dir="rtl" className="bg-white text-black rounded-2xl overflow-hidden shadow-lg print:shadow-none print:rounded-none">
+      <div ref={cardRef} dir="rtl" className="bg-white text-black rounded-2xl overflow-hidden shadow-lg print:shadow-none print:rounded-none">
         {/* الهيدر */}
         <div className="bg-black px-6 py-5 text-center">
           {noLogo ? (
@@ -83,7 +132,11 @@ export default function InvoicePage() {
         </div>
       </div>
 
-      <button className="btn mt-4 print:hidden" onClick={() => window.print()}>طباعة / حفظ PDF</button>
+      <div className="mt-4 space-y-2 print:hidden">
+        <button className="btn" disabled={pdfBusy} onClick={savePdf}>{pdfBusy ? 'جاري تجهيز الـ PDF...' : 'حفظ / مشاركة PDF'}</button>
+        <button className="btn" onClick={() => window.print()}>طباعة</button>
+        {pdfErr && <div className="text-red-400 text-sm text-center">{pdfErr}</div>}
+      </div>
     </main>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useDb, savePrices, addService } from '@/lib/db';
+import { useDb, savePrices, addService, deleteService } from '@/lib/db';
 
 export default function PricesPage() {
   const db = useDb();
@@ -41,6 +41,20 @@ export default function PricesPage() {
     }
   };
 
+  const del = async (s) => {
+    if (!window.confirm(`تمسح خدمة "${s.n}"؟ الأوردرات القديمة هتفضل محتفظة باسمها وسعرها.`)) return;
+    setBusy(true);
+    try {
+      await deleteService(s);
+      setVals((v) => { const n = { ...v }; delete n[s.k]; return n; });
+      setToast('تم مسح ' + s.n);
+    } catch (e) {
+      console.error(e); setToast('حصل خطأ، الخدمة متمسحتش');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
       <h2 className="text-base text-mut font-semibold mt-5 mb-2.5">أسعار الخدمات</h2>
@@ -50,6 +64,7 @@ export default function PricesPage() {
             <label htmlFor={'p-' + s.k} className="flex-1">{s.n}{s.k === 'chem' && <small className="text-mut"> (الأساسي)</small>}</label>
             <input id={'p-' + s.k} type="number" inputMode="numeric" className="field !w-28 text-center"
               value={vals[s.k] ?? db.prices[s.k] ?? ''} onChange={(e) => setVals({ ...vals, [s.k]: e.target.value })} />
+            <button disabled={busy} onClick={() => del(s)} className="w-10 text-red-400 text-sm">مسح</button>
           </div>
         ))}
         <button className="btn" onClick={save}>حفظ الأسعار</button>
