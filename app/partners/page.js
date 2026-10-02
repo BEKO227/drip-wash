@@ -1,5 +1,4 @@
 'use client';
-import { SERVICES } from '@/lib/config';
 import { useDb, useToday, ordersOf } from '@/lib/db';
 import { dayLabel, timeLabel, itemsName, num, total } from '@/lib/format';
 
@@ -8,6 +7,7 @@ export default function TodayPage() {
   const db = useDb({ from: today, to: today });
   if (!db) return null;
   const t = ordersOf(db, today);
+  const list = db.services;
   return (
     <>
       <p className="text-xl font-bold mb-2">{dayLabel(today)}</p>
@@ -22,11 +22,11 @@ export default function TodayPage() {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 mt-2.5">
-        {SERVICES.map((s, i) => {
+        {list.map((s, i) => {
           let c = 0, r = 0;
           t.forEach((o) => o.items.forEach((it) => { if (it.k === s.k) { c++; r += it.p; } }));
           return (
-            <div key={s.k} className={`flex justify-between bg-card border border-line rounded-xl px-3 py-2.5 text-sm ${i === SERVICES.length - 1 && SERVICES.length % 2 ? 'col-span-2' : ''}`}>
+            <div key={s.k} className={`flex justify-between bg-card border border-line rounded-xl px-3 py-2.5 text-sm ${i === list.length - 1 && list.length % 2 ? 'col-span-2' : ''}`}>
               <span>{s.n}</span><span><b className="text-brand2">{num(c)}</b> · {num(r)}</span>
             </div>
           );
@@ -36,8 +36,22 @@ export default function TodayPage() {
       <div className="card">
         {t.length ? t.map((o) => (
           <div key={o.id} className="row">
-            <div>{o.car}<br /><small className="text-mut">{itemsName(o)} · {timeLabel(o.ts)}{o.byName ? ' · سجّلها ' + o.byName : ''}</small></div>
-            <b>{num(o.price)}</b>
+            <div>
+              {o.car}{o.plate ? ' · ' + o.plate : ''}<br />
+              <small className="text-mut">
+                {itemsName(o)} · {timeLabel(o.ts)}{o.byName ? ' · سجّلها ' + o.byName : ''}
+                {o.phone ? ' · ' + o.phone : ''}
+              </small>
+            </div>
+            <div className="text-left">
+              <b>{num(o.price)}</b>
+              {o.invoiceToken && (
+                <>
+                  <br />
+                  <a className="text-brand2 text-sm" href={`/invoice/${o.invoiceToken}`} target="_blank" rel="noreferrer">فاتورة</a>
+                </>
+              )}
+            </div>
           </div>
         )) : <div className="text-mut text-center py-4 text-sm">لسه مفيش عربيات النهاردة.</div>}
       </div>

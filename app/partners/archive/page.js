@@ -25,8 +25,22 @@ export default function ArchivePage() {
                 <div className="bg-card2 rounded-xl px-3 py-1 my-1 mb-2">
                   {l.map((o) => (
                     <div key={o.id} className="row">
-                      <div>{o.car}<br /><small className="text-mut">{itemsName(o)} · {timeLabel(o.ts)}{o.byName ? ' · سجّلها ' + o.byName : ''}</small></div>
-                      <span>{num(o.price)}</span>
+                      <div>
+                        {o.car}{o.plate ? ' · ' + o.plate : ''}<br />
+                        <small className="text-mut">
+                          {itemsName(o)} · {timeLabel(o.ts)}{o.byName ? ' · سجّلها ' + o.byName : ''}
+                          {o.phone ? ' · ' + o.phone : ''}
+                        </small>
+                      </div>
+                      <div className="text-left">
+                        <span>{num(o.price)}</span>
+                        {o.invoiceToken && (
+                          <>
+                            <br />
+                            <a className="text-brand2 text-sm" href={`/invoice/${o.invoiceToken}`} target="_blank" rel="noreferrer">فاتورة</a>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

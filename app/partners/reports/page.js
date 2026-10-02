@@ -1,7 +1,6 @@
 'use client';
 import { useState } from 'react';
 import Logo from '@/components/Logo';
-import { SERVICES } from '@/lib/config';
 import { useDb } from '@/lib/db';
 import { dayKey, dayLabel, timeLabel, itemsName, num, total } from '@/lib/format';
 
@@ -62,7 +61,7 @@ export default function ReportsPage() {
 
         <h3 className="font-semibold mt-5 mb-2">ملخص حسب الخدمة</h3>
         <div className="card">
-          {SERVICES.map((s) => {
+          {db.services.map((s) => {
             let c = 0, r = 0;
             orders.forEach((o) => o.items.forEach((i) => { if (i.k === s.k) { c++; r += i.p; } }));
             return <div key={s.k} className="row"><span>{s.n}</span><span>{num(c)} مرة · <b>{num(r)} ج.م</b></span></div>;
@@ -89,9 +88,19 @@ export default function ReportsPage() {
               <div className="flex justify-between font-semibold mb-2">
                 <span>{dayLabel(d)}</span><span>{num(l.length)} عربية · {num(total(l))} ج.م</span>
               </div>
-              <table className="w-full text-sm min-w-[520px]">
+              <table className="w-full text-sm min-w-[760px] print:min-w-0">
                 <thead>
-                  <tr><th className={th}>#</th><th className={th}>وقت الدخول</th><th className={th}>العربية</th><th className={th}>الخدمات</th><th className={th}>السعر (ج.م)</th><th className={th}>سجّلها</th></tr>
+                  <tr>
+                    <th className={th}>#</th>
+                    <th className={th}>وقت الدخول</th>
+                    <th className={th}>العربية</th>
+                    <th className={th}>اللوحة</th>
+                    <th className={th}>الخدمات</th>
+                    <th className={th}>السعر (ج.م)</th>
+                    <th className={th}>سجّلها</th>
+                    <th className={th + ' print:hidden'}>التليفون</th>
+                    <th className={th + ' print:hidden'}>الفاتورة</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {l.map((o, i) => (
@@ -99,12 +108,23 @@ export default function ReportsPage() {
                       <td className={td}>{num(i + 1)}</td>
                       <td className={td}>{timeLabel(o.ts)}</td>
                       <td className={td}>{o.car}</td>
+                      <td className={td}>{o.plate || '—'}</td>
                       <td className={td}>{itemsName(o)}</td>
                       <td className={td + ' font-semibold'}>{num(o.price)}</td>
                       <td className={td}>{o.byName || '—'}</td>
+                      <td className={td + ' print:hidden'} dir="ltr">{o.phone || '—'}</td>
+                      <td className={td + ' print:hidden'}>
+                        {o.invoiceToken
+                          ? <a className="text-brand2" href={`/invoice/${o.invoiceToken}`} target="_blank" rel="noreferrer">فاتورة</a>
+                          : '—'}
+                      </td>
                     </tr>
                   ))}
-                  <tr><td className="py-2 px-2 font-bold" colSpan={4}>إجمالي اليوم</td><td className="py-2 px-2 font-bold">{num(total(l))}</td><td /></tr>
+                  <tr>
+                    <td className="py-2 px-2 font-bold" colSpan={5}>إجمالي اليوم</td>
+                    <td className="py-2 px-2 font-bold">{num(total(l))}</td>
+                    <td colSpan={3} />
+                  </tr>
                 </tbody>
               </table>
             </div>
