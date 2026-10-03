@@ -121,10 +121,15 @@ export default function InvoicePage() {
             ))}
           </div>
 
-          {/* الإجمالي */}
-          <div className="mt-3 flex justify-between items-center rounded-xl bg-black px-4 py-3 text-white">
-            <span className="font-semibold">الإجمالي</span>
-            <strong className="text-xl text-brand2">{num(inv.price)} ج.م</strong>
+          {/* الإجمالي (الألوان inline عشان تظهر صح في الشاشة والطباعة والـ PDF) */}
+          <div
+            className="mt-3 flex justify-between items-center rounded-xl px-4 py-3"
+            style={{ backgroundColor: '#000000', color: '#ffffff' }}
+          >
+            <span className="font-semibold" style={{ color: '#ffffff' }}>الإجمالي</span>
+            <span className="text-xl font-bold" style={{ color: '#ff8a1f' }}>
+              {num(inv.price)} ج.م
+            </span>
           </div>
 
           <p className="text-center text-sm mt-5">شكراً لزيارتكم 🚗✨</p>

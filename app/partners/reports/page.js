@@ -27,17 +27,18 @@ export default function ReportsPage() {
   const btn = 'text-sm px-3 py-2 rounded-xl border border-line bg-card text-mut';
   const th = 'text-start font-semibold text-mut py-2 px-2 border-b border-line';
   const td = 'py-2 px-2 border-b border-line align-top';
+  const dateInput = 'field mt-1 block w-full min-w-0 max-w-full appearance-none text-center';
   return (
     <>
       <div className="print:hidden">
         <h2 className="text-base text-mut font-semibold mt-5 mb-2.5">تقرير الحسابات</h2>
-        <div className="card space-y-3">
-          <div className="flex gap-2.5">
-            <label className="flex-1 text-sm text-mut">من
-              <input type="date" dir="ltr" className="field mt-1" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <div className="card space-y-3 overflow-hidden">
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className="min-w-0 text-sm text-mut">من
+              <input type="date" dir="ltr" className={dateInput} value={from} onChange={(e) => setFrom(e.target.value)} />
             </label>
-            <label className="flex-1 text-sm text-mut">إلى
-              <input type="date" dir="ltr" className="field mt-1" value={to} onChange={(e) => setTo(e.target.value)} />
+            <label className="min-w-0 text-sm text-mut">إلى
+              <input type="date" dir="ltr" className={dateInput} value={to} onChange={(e) => setTo(e.target.value)} />
             </label>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -55,8 +56,8 @@ export default function ReportsPage() {
         </div>
         <p className="text-lg font-bold">{period}</p>
         <div className="grid grid-cols-2 gap-2.5 my-3">
-          <div className="card"><small className="text-mut text-[13px]">إجمالي الحساب</small><strong className="block text-3xl">{num(total(orders))} <span className="text-sm font-medium">ج.م</span></strong></div>
-          <div className="card"><small className="text-mut text-[13px]">عدد العربيات</small><strong className="block text-3xl">{num(orders.length)}</strong></div>
+          <div className="card min-w-0"><small className="text-mut text-[13px]">إجمالي الحساب</small><strong className="block text-3xl">{num(total(orders))} <span className="text-sm font-medium">ج.م</span></strong></div>
+          <div className="card min-w-0"><small className="text-mut text-[13px]">عدد العربيات</small><strong className="block text-3xl">{num(orders.length)}</strong></div>
         </div>
 
         <h3 className="font-semibold mt-5 mb-2">ملخص حسب الخدمة</h3>
