@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const TABS = [['/worker', 'تسجيل'], ['/partners', 'النهاردة'], ['/partners/archive', 'الأرشيف'], ['/partners/reports', 'التقارير'], ['/partners/prices', 'الأسعار']];
+const TABS = [['/worker', 'تسجيل'], ['/partners', 'النهاردة'], ['/partners/archive', 'الأرشيف'], ['/partners/reports', 'التقارير'], ['/partners/prices', 'الأسعار'], ['/partners/packages', 'الباقات']];
 export default function PartnerTabs() {
   const path = usePathname();
   return (

@@ -5,9 +5,17 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { TZ } from '@/lib/config';
 import { num, svName } from '@/lib/format';
+import { buckets, washName, TYPE_NOTE, ENGINE_OFFER } from '@/lib/subs';
 
 const stamp = (ts) =>
   new Intl.DateTimeFormat('ar-EG', { timeZone: TZ, dateStyle: 'long', timeStyle: 'short' }).format(new Date(ts));
+const dstamp = (ts) =>
+  new Intl.DateTimeFormat('ar-EG', { timeZone: TZ, dateStyle: 'long' }).format(new Date(ts));
+const carKind = (c) => (c === 'suv' ? 'SUV / كروس أوفر' : 'سيدان');
+
+// ألوان inline عشان تظهر صح في الشاشة والطباعة والـ PDF
+const ORANGE = '#ff8a1f';
+const SOFT = '#fff4e8';
 
 export default function InvoicePage() {
   const { token } = useParams();
@@ -73,6 +81,15 @@ export default function InvoicePage() {
   if (inv === undefined) return <p className="p-6 text-center">جاري التحميل...</p>;
   if (inv === null) return <p className="p-6 text-center">الفاتورة غير موجودة أو الرابط غير صحيح.</p>;
 
+  // فاتورة باقة: sub.kind = 'start' (فاتورة الاشتراك) أو 'wash' (غسلة من الباقة)
+  const sub = inv.sub;
+  const isStart = sub?.kind === 'start';
+  const isWash = sub?.kind === 'wash';
+  const rows = sub ? buckets(sub) : [];
+  const all = rows.reduce((a, b) => a + b.total, 0);
+  const usedAll = rows.reduce((a, b) => a + b.used, 0);
+  const title = isStart ? 'فاتورة اشتراك باقة' : isWash ? 'غسلة من باقة اشتراك' : 'فاتورة';
+
   return (
     <main className="mx-auto max-w-md p-4 print:max-w-none print:p-0">
       <style>{`
@@ -97,40 +114,87 @@ export default function InvoicePage() {
         <div className="h-1.5 bg-brand" />
 
         <div className="px-6 py-5">
-          <h2 className="text-center text-lg font-bold mb-4">فاتورة</h2>
+          <h2 className="text-center text-lg font-bold mb-4">{title}</h2>
+
+          {/* ملحوظة واضحة إن الغسلة تابعة لباقة */}
+          {isWash && (
+            <div className="mb-4 rounded-xl p-3 text-center" style={{ border: `2px solid ${ORANGE}`, backgroundColor: SOFT }}>
+              <div className="font-extrabold">🔖 هذه الغسلة تابعة لباقة اشتراك</div>
+              <div dir="ltr" className="font-bold" style={{ color: '#e86f00' }}>{sub.planName}</div>
+              <div className="text-sm mt-1">{washName(sub.washType)} · رقم {num(sub.washNo)} من {num(sub.washOf)}</div>
+            </div>
+          )}
 
           {/* بيانات الفاتورة */}
           <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
             <span className="text-black/50">رقم الفاتورة</span><b dir="ltr" className="text-right">#{inv.no}</b>
             <span className="text-black/50">التاريخ والوقت</span><span>{stamp(inv.ts)}</span>
+            {sub && (<><span className="text-black/50">العميل</span><b>{sub.customerName}</b></>)}
             <span className="text-black/50">العربية</span><span>{inv.car}</span>
             {inv.plate && (<><span className="text-black/50">اللوحة</span><b>{inv.plate}</b></>)}
+            {sub && (<><span className="text-black/50">الباقة</span><b dir="ltr" className="text-right">{sub.planName} ({carKind(sub.car)})</b></>)}
+            {isStart && (<><span className="text-black/50">بداية الاشتراك</span><span>{dstamp(sub.startDate)}</span></>)}
+            {sub && (<><span className="text-black/50">{isStart ? 'نهاية الاشتراك' : 'ينتهي الاشتراك'}</span><b>{dstamp(sub.endDate)}</b></>)}
             {inv.byName && (<><span className="text-black/50">أصدرها</span><span>{inv.byName}</span></>)}
           </div>
 
           {/* الخدمات */}
           <div className="mt-5 border-t border-black/20">
             <div className="flex justify-between py-2 text-xs text-black/50">
-              <span>الخدمة</span><span>السعر</span>
+              <span>{isStart ? 'الباقة' : 'الخدمة'}</span><span>السعر</span>
             </div>
             {inv.items.map((it, i) => (
-              <div key={i} className="flex justify-between py-2 border-t border-dashed border-black/20">
+              <div key={i} className="flex justify-between gap-3 py-2 border-t border-dashed border-black/20">
                 <span>{it.n ?? svName(it.k)}</span>
-                <span>{num(it.p)} ج.م</span>
+                <span className="shrink-0">{isWash ? 'من الباقة' : `${num(it.p)} ج.م`}</span>
               </div>
             ))}
           </div>
 
-          {/* الإجمالي (الألوان inline عشان تظهر صح في الشاشة والطباعة والـ PDF) */}
+          {/* رصيد الباقة لكل نوع غسلة */}
+          {sub && (
+            <div className="mt-4 border-t border-black/20">
+              <div className="py-2 text-xs text-black/50">رصيد غسلات الباقة</div>
+              <div className="grid grid-cols-4 pb-1 text-center text-xs text-black/50">
+                <span className="text-start">النوع</span><span>الإجمالي</span><span>المستخدم</span><span>المتبقي</span>
+              </div>
+              {rows.map((b) => (
+                <div key={b.kind} className="grid grid-cols-4 items-center border-t border-dashed border-black/20 py-2 text-center text-sm"
+                  style={isWash && b.kind === sub.washKind ? { backgroundColor: SOFT } : undefined}>
+                  <span className="text-start font-semibold">
+                    {washName(b.type)}
+                    <small className="block text-[10px] font-normal text-black/50">{TYPE_NOTE[b.type]}{b.kind === 'free' ? ' · مجانية' : ''}</small>
+                  </span>
+                  <span>{num(b.total)}</span><span>{num(b.used)}</span><b>{num(b.total - b.used)}</b>
+                </div>
+              ))}
+              <div className="grid grid-cols-4 border-t border-black/20 py-2 text-center text-sm font-bold">
+                <span className="text-start">الإجمالي</span><span>{num(all)}</span><span>{num(usedAll)}</span><span>{num(all - usedAll)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* الإجمالي */}
           <div
             className="mt-3 flex justify-between items-center rounded-xl px-4 py-3"
             style={{ backgroundColor: '#000000', color: '#ffffff' }}
           >
-            <span className="font-semibold" style={{ color: '#ffffff' }}>الإجمالي</span>
-            <span className="text-xl font-bold" style={{ color: '#ff8a1f' }}>
-              {num(inv.price)} ج.م
+            <span className="font-semibold" style={{ color: '#ffffff' }}>{isWash ? 'المطلوب دفعه' : 'الإجمالي'}</span>
+            <span className="text-xl font-bold" style={{ color: ORANGE }}>
+              {isWash ? 'من الباقة' : `${num(inv.price)} ج.م`}
             </span>
           </div>
+
+          {/* عرض كيماوي الموتور لمشتركي الباقات */}
+          {sub && all >= ENGINE_OFFER.minWashes && (
+            <div className="mt-4 rounded-xl p-3 text-center text-sm" style={{ border: `2px dashed ${ORANGE}`, backgroundColor: SOFT }}>
+              <div className="font-extrabold">🔧 عرض خاص لمشتركي الباقات</div>
+              <div className="mt-1">
+                كيماوي الموتور بـ <b style={{ color: '#e86f00' }}>{num(ENGINE_OFFER.price)} جنيه</b> بدل <s>{num(ENGINE_OFFER.was)} جنيه</s>
+              </div>
+              <div className="mt-1 text-[11px] text-black/50">مع باقات 6 و 9 غسلات</div>
+            </div>
+          )}
 
           <p className="text-center text-sm mt-5">شكراً لزيارتكم 🚗✨</p>
           <p className="text-center text-[11px] text-black/40 mt-1">Drip Wash</p>

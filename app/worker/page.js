@@ -1,14 +1,18 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ServicePicker, { nextSel } from '@/components/ServicePicker';
 import Guard from '@/components/Guard';
 import PartnerTabs from '@/components/PartnerTabs';
 import { useAuth } from '@/lib/auth';
 import { useDb, useToday, addOrder, ordersOf } from '@/lib/db';
+import { listen, statusOf, buckets, hasBuckets, washName, recordSubWash, waUrl, washMsg, dateAr, TYPE_LABEL } from '@/lib/subs';
 import { dayLabel, timeLabel, itemsName, num } from '@/lib/format';
 
 const PHONE_RE = /^01[0125]\d{8}$/;
 const cleanPlate = (s) => s.trim().replace(/\s+/g, ' ');
+// توحيد اللوحة للمقارنة: أرقام عربي/إنجليزي، مسافات، شرطات، وأشكال الألف
+const normPlate = (s) =>
+  (s || '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[أإآ]/g, 'ا').replace(/[\s-]/g, '').toLowerCase();
 const invoiceUrl = (token) => `${window.location.origin}/invoice/${token}`;
 const waLink = (phone, token, price) =>
   `https://wa.me/20${phone.slice(1)}?text=${encodeURIComponent(
@@ -30,7 +34,10 @@ function WorkerScreen() {
   const [chemPrice, setChemPrice] = useState('');
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
-  const [last, setLast] = useState(null); // آخر فاتورة اتسجلت
+  const [last, setLast] = useState(null); // آخر فاتورة اتسجلت (عادية أو من باقة)
+  const [subs, setSubs] = useState([]);
+
+  useEffect(() => listen('subscriptions', setSubs), []);
 
   if (!db) return null;
   const chemP = chemPrice === '' ? db.prices.chem : Number(chemPrice) || 0;
@@ -40,7 +47,34 @@ function WorkerScreen() {
   const list = ordersOf(db, today);
   const ready = sel.length > 0 && car.trim() && cleanPlate(plate) && PHONE_RE.test(phone);
 
+  // اشتراك العميل: بيتطابق برقم اللوحة أو رقم التليفون
+  const np = normPlate(plate);
+  const mine = subs.filter((s) => (np && normPlate(s.plate) === np) || (PHONE_RE.test(phone) && s.phone === phone));
+  const match = mine.filter((s) => ['active', 'soon'].includes(statusOf(s).key)).sort((a, b) => a.endDate - b.endDate)[0];
+  const ended = !match && mine.some((s) => !s.cancelled);
+
   const pick = (k) => { const r = nextSel(sel, k); setSel(r.sel); setToast(r.msg || ''); };
+
+  const reset = () => { setCar(''); setPlate(''); setPhone(''); setSel([]); setChemPrice(''); };
+
+  // kind = 'main' (كاملة أو VIP) أو 'free' (الخارجي المجاني)
+  const washFromSub = async (b) => {
+    if (busy || !match) return;
+    if (!window.confirm(`تسجل ${washName(b.type)} من اشتراك ${match.customerName} (باقة ${match.planName})؟`)) return;
+    setBusy(true);
+    try {
+      const r = await recordSubWash(match.id, b.kind, user);
+      setLast(r);
+      setToast(`🔖 ${washName(r.sub.washType)} ${r.sub.washNo} من ${r.sub.washOf} · من باقة ${r.sub.planName}`);
+      reset();
+      document.getElementById('car')?.focus();
+    } catch (e) {
+      console.error(e);
+      setToast(e?.code ? 'الخصم متمش، حاول تاني' : e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async () => {
     const name = car.trim();
@@ -56,7 +90,7 @@ function WorkerScreen() {
       const r = await addOrder(name, items, user, phone, pl);
       setLast({ ...r, car: name, plate: pl, phone });
       setToast('تم تسجيل ' + name);
-      setCar(''); setPlate(''); setPhone(''); setSel([]); setChemPrice('');
+      reset();
       document.getElementById('car')?.focus();
     } catch (e) {
       console.error(e);
@@ -77,6 +111,26 @@ function WorkerScreen() {
           value={plate} onChange={(e) => setPlate(e.target.value)} />
         <input className="field mt-2.5" type="tel" inputMode="numeric" maxLength={11} placeholder="رقم تليفون العميل (01xxxxxxxxx) *" autoComplete="off"
           value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} />
+
+        {match && hasBuckets(match) && (
+          <div className="mt-3 rounded-xl border border-brand p-3 text-sm">
+            <div>🔖 العميل مشترك في باقة <b dir="ltr">{match.planName}</b></div>
+            <div className="text-mut text-xs mt-1">
+              {match.customerName}{match.carModel ? ' · ' + match.carModel : ''} · ينتهي {dateAr(match.endDate)}
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {buckets(match).map((b) => (
+                <button key={b.kind} className="btn" disabled={busy || b.used >= b.total} onClick={() => washFromSub(b)}>
+                  {washName(b.type)}<br />
+                  <small>{b.used >= b.total ? 'خلصت' : `متبقي ${num(b.total - b.used)} من ${num(b.total)}`}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {match && !hasBuckets(match) && <p className="mt-3 text-xs text-yellow-400">للعميل ده اشتراك قديم (قبل تقسيم الغسلات حسب النوع). بلّغ الإدارة تحذفه وتسجّله من جديد.</p>}
+        {ended && <p className="mt-3 text-xs text-yellow-400">للعميل ده اشتراك لكنه منتهي أو غسلاته خلصت. حاسبه عادي أو بلّغ الإدارة للتجديد.</p>}
+
         <p className="text-mut text-[13px] mt-3">اختار خدمة أو أكتر:</p>
         <ServicePicker sel={sel} prices={db.prices} services={db.services} onPick={pick} />
         {sel.includes('chem') && (
@@ -96,13 +150,21 @@ function WorkerScreen() {
 
       {last && (
         <div className="card mt-3">
+          {last.sub && (
+            <div className="mb-2 inline-block rounded-lg border border-brand px-2 py-0.5 text-xs text-brand2">🔖 من باقة {last.sub.planName}</div>
+          )}
           <div className="flex justify-between items-center">
             <span>فاتورة #{last.no} ({last.car} · {last.plate})</span>
-            <strong className="text-brand2">{num(last.price)} ج.م</strong>
+            {last.sub ? <strong className="text-brand2 text-sm">من الباقة</strong> : <strong className="text-brand2">{num(last.price)} ج.م</strong>}
           </div>
+          {last.sub && (
+            <div className="text-mut text-xs mt-1">
+              {washName(last.sub.washType)} {num(last.sub.washNo)} من {num(last.sub.washOf)} · المتبقي: {buckets(last.sub).map((b) => `${TYPE_LABEL[b.type]} ${num(b.total - b.used)}`).join(' | ')}
+            </div>
+          )}
           <div className="flex gap-2 mt-3">
             <a className="btn flex-1 text-center" href={`/invoice/${last.token}`} target="_blank" rel="noreferrer">عرض الفاتورة</a>
-            <a className="btn flex-1 text-center" href={waLink(last.phone, last.token, last.price)} target="_blank" rel="noreferrer">إرسال واتساب</a>
+            <a className="btn flex-1 text-center" href={last.sub ? waUrl(last.phone, washMsg(last)) : waLink(last.phone, last.token, last.price)} target="_blank" rel="noreferrer">إرسال واتساب</a>
           </div>
         </div>
       )}
@@ -112,7 +174,9 @@ function WorkerScreen() {
         {list.length ? list.map((o) => (
           <div key={o.id} className="row">
             <div>
-              {o.car}{o.plate ? ' · ' + o.plate : ''}<br />
+              {o.car}{o.plate ? ' · ' + o.plate : ''}
+              {o.subId && <span className="mx-1.5 rounded border border-brand px-1.5 py-0.5 text-[11px] text-brand2">🔖 من الباقة</span>}
+              <br />
               <small className="text-mut">{itemsName(o)}</small>
             </div>
             <div className="text-left">

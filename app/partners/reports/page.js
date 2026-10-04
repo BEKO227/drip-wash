@@ -1,19 +1,43 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Logo from '@/components/Logo';
 import { useDb } from '@/lib/db';
+import { listen, washName } from '@/lib/subs';
 import { dayKey, dayLabel, timeLabel, itemsName, num, total } from '@/lib/format';
+
+const TYPES = ['full', 'vip', 'ext'];
+const evDay = (e) => dayKey(new Date(e.ts));
 
 export default function ReportsPage() {
   const [from, setFrom] = useState(dayKey());
   const [to, setTo] = useState(dayKey());
+  const [subs, setSubs] = useState(null);
   const db = useDb({ from: from <= to ? from : to, to: from <= to ? to : from });
-  if (!db) return null;
+
+  useEffect(() => listen('subscriptions', setSubs), []);
+
+  if (!db || !subs) return null;
 
   const [a, b] = from <= to ? [from, to] : [to, from];
   const orders = db.orders.filter((o) => o.day >= a && o.day <= b);
+  const washOrders = orders.filter((o) => o.subId); // غسلات من الباقات (سعرها 0)
   const days = [...new Set(orders.map((o) => o.day))].sort();
   const period = a === b ? dayLabel(a) : `من ${dayLabel(a)} إلى ${dayLabel(b)}`;
+
+  // إيراد الاشتراكات: كل اشتراك جديد وكل تجديد بيتحسب في يوم دفعه
+  const subEvents = subs
+    .flatMap((s) => [
+      { ts: s.createdAt, price: Number(s.price) || 0, s, type: 'اشتراك جديد' },
+      ...(s.renewals || []).map((r) => ({ ts: r.ts, price: Number(r.price) || 0, s, type: 'تجديد' })),
+    ])
+    .filter((e) => { const d = evDay(e); return d >= a && d <= b; })
+    .sort((x, y) => x.ts - y.ts);
+  const subTotal = subEvents.reduce((acc, e) => acc + e.price, 0);
+  const allDays = [...new Set([...orders.map((o) => o.day), ...subEvents.map(evDay)])].sort();
+
+  // عدد الغسلات من الباقات حسب النوع
+  const byType = {};
+  washOrders.forEach((o) => o.items.forEach((i) => { byType[i.k] = (byType[i.k] || 0) + 1; }));
 
   const setRange = (x, y) => { setFrom(x); setTo(y); };
   const t = dayKey();
@@ -28,6 +52,7 @@ export default function ReportsPage() {
   const th = 'text-start font-semibold text-mut py-2 px-2 border-b border-line';
   const td = 'py-2 px-2 border-b border-line align-top';
   const dateInput = 'field mt-1 block w-full min-w-0 max-w-full appearance-none text-center';
+  const badge = 'mx-1 rounded border border-brand px-1 text-[11px] text-brand2';
   return (
     <>
       <div className="print:hidden">
@@ -46,7 +71,7 @@ export default function ReportsPage() {
             <button className={btn} onClick={() => setRange(dayKey(new Date(Date.now() - 6 * 864e5)), t)}>آخر 7 أيام</button>
             <button className={btn} onClick={() => setRange(t.slice(0, 8) + '01', t)}>الشهر ده</button>
           </div>
-          <button className="btn" onClick={exportPdf} disabled={!orders.length}>تصدير PDF</button>
+          <button className="btn" onClick={exportPdf} disabled={!orders.length && !subEvents.length}>تصدير PDF</button>
         </div>
       </div>
 
@@ -56,8 +81,16 @@ export default function ReportsPage() {
         </div>
         <p className="text-lg font-bold">{period}</p>
         <div className="grid grid-cols-2 gap-2.5 my-3">
-          <div className="card min-w-0"><small className="text-mut text-[13px]">إجمالي الحساب</small><strong className="block text-3xl">{num(total(orders))} <span className="text-sm font-medium">ج.م</span></strong></div>
-          <div className="card min-w-0"><small className="text-mut text-[13px]">عدد العربيات</small><strong className="block text-3xl">{num(orders.length)}</strong></div>
+          <div className="card min-w-0"><small className="text-mut text-[13px]">إجمالي الإيراد</small><strong className="block text-3xl">{num(total(orders) + subTotal)} <span className="text-sm font-medium">ج.م</span></strong></div>
+          <div className="card min-w-0">
+            <small className="text-mut text-[13px]">عدد العربيات</small><strong className="block text-3xl">{num(orders.length)}</strong>
+            {washOrders.length > 0 && <small className="text-mut text-[12px]">منها {num(washOrders.length)} من الباقات</small>}
+          </div>
+          <div className="card min-w-0"><small className="text-mut text-[13px]">حساب العربيات</small><strong className="block text-2xl">{num(total(orders))} <span className="text-sm font-medium">ج.م</span></strong></div>
+          <div className="card min-w-0">
+            <small className="text-mut text-[13px]">إيراد الاشتراكات</small><strong className="block text-2xl">{num(subTotal)} <span className="text-sm font-medium">ج.م</span></strong>
+            <small className="text-mut text-[12px]">{num(subEvents.length)} اشتراك / تجديد</small>
+          </div>
         </div>
 
         <h3 className="font-semibold mt-5 mb-2">ملخص حسب الخدمة</h3>
@@ -69,14 +102,73 @@ export default function ReportsPage() {
           })}
         </div>
 
-        {days.length > 1 && (
+        {washOrders.length > 0 && (
+          <>
+            <h3 className="font-semibold mt-5 mb-2">غسلات الباقات (مدفوعة وقت الاشتراك)</h3>
+            <div className="card">
+              {TYPES.filter((k) => byType['sub-' + k]).map((k) => (
+                <div key={k} className="row"><span>{washName(k)}</span><span>{num(byType['sub-' + k])} مرة</span></div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {allDays.length > 1 && (
           <>
             <h3 className="font-semibold mt-5 mb-2">ملخص حسب اليوم</h3>
             <div className="card">
-              {days.map((d) => {
+              {allDays.map((d) => {
                 const l = orders.filter((o) => o.day === d);
-                return <div key={d} className="row"><span>{dayLabel(d)} · {num(l.length)} عربية</span><b>{num(total(l))} ج.م</b></div>;
+                const ev = subEvents.filter((e) => evDay(e) === d);
+                const evSum = ev.reduce((acc, e) => acc + e.price, 0);
+                return (
+                  <div key={d} className="row">
+                    <span>{dayLabel(d)} · {num(l.length)} عربية{ev.length ? ` · ${num(ev.length)} اشتراك` : ''}</span>
+                    <b>{num(total(l) + evSum)} ج.م</b>
+                  </div>
+                );
               })}
+            </div>
+          </>
+        )}
+
+        {subEvents.length > 0 && (
+          <>
+            <h3 className="font-semibold mt-6 mb-2">الاشتراكات في الفترة</h3>
+            <div className="card mb-4 overflow-x-auto">
+              <table className="w-full text-sm min-w-[620px] print:min-w-0">
+                <thead>
+                  <tr>
+                    <th className={th}>التاريخ</th>
+                    <th className={th}>العميل</th>
+                    <th className={th}>الباقة</th>
+                    <th className={th}>النوع</th>
+                    <th className={th}>المبلغ (ج.م)</th>
+                    <th className={th + ' print:hidden'}>الفاتورة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subEvents.map((e, i) => (
+                    <tr key={i} className="break-inside-avoid">
+                      <td className={td}>{dayLabel(evDay(e))}<br /><small className="text-mut">{timeLabel(e.ts)}</small></td>
+                      <td className={td}>{e.s.customerName}<br /><small className="text-mut">{e.s.plate}</small></td>
+                      <td className={td} dir="ltr">{e.s.planName}</td>
+                      <td className={td}>{e.type}</td>
+                      <td className={td + ' font-semibold'}>{num(e.price)}</td>
+                      <td className={td + ' print:hidden'}>
+                        {e.type === 'اشتراك جديد' && e.s.invoiceToken
+                          ? <a className="text-brand2" href={`/invoice/${e.s.invoiceToken}`} target="_blank" rel="noreferrer">فاتورة</a>
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className="py-2 px-2 font-bold" colSpan={4}>إجمالي الاشتراكات</td>
+                    <td className="py-2 px-2 font-bold">{num(subTotal)}</td>
+                    <td className="print:hidden" />
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </>
         )}
@@ -110,8 +202,8 @@ export default function ReportsPage() {
                       <td className={td}>{timeLabel(o.ts)}</td>
                       <td className={td}>{o.car}</td>
                       <td className={td}>{o.plate || '—'}</td>
-                      <td className={td}>{itemsName(o)}</td>
-                      <td className={td + ' font-semibold'}>{num(o.price)}</td>
+                      <td className={td}>{itemsName(o)}{o.subId && <span className={badge}>🔖 من الباقة</span>}</td>
+                      <td className={td + ' font-semibold'}>{o.subId ? '0 (باقة)' : num(o.price)}</td>
                       <td className={td}>{o.byName || '—'}</td>
                       <td className={td + ' print:hidden'} dir="ltr">{o.phone || '—'}</td>
                       <td className={td + ' print:hidden'}>
