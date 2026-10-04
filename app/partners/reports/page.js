@@ -27,8 +27,8 @@ export default function ReportsPage() {
   // إيراد الاشتراكات: كل اشتراك جديد وكل تجديد بيتحسب في يوم دفعه
   const subEvents = subs
     .flatMap((s) => [
-      { ts: s.createdAt, price: Number(s.price) || 0, s, type: 'اشتراك جديد' },
-      ...(s.renewals || []).map((r) => ({ ts: r.ts, price: Number(r.price) || 0, s, type: 'تجديد' })),
+      { ts: s.createdAt, price: Number(s.price) || 0, s, type: 'اشتراك جديد', token: s.invoiceToken },
+      ...(s.renewals || []).map((r) => ({ ts: r.ts, price: Number(r.price) || 0, s, type: 'تجديد', token: r.token })),
     ])
     .filter((e) => { const d = evDay(e); return d >= a && d <= b; })
     .sort((x, y) => x.ts - y.ts);
@@ -156,8 +156,8 @@ export default function ReportsPage() {
                       <td className={td}>{e.type}</td>
                       <td className={td + ' font-semibold'}>{num(e.price)}</td>
                       <td className={td + ' print:hidden'}>
-                        {e.type === 'اشتراك جديد' && e.s.invoiceToken
-                          ? <a className="text-brand2" href={`/invoice/${e.s.invoiceToken}`} target="_blank" rel="noreferrer">فاتورة</a>
+                        {e.token
+                          ? <a className="text-brand2" href={`/invoice/${e.token}`} target="_blank" rel="noreferrer">فاتورة</a>
                           : '—'}
                       </td>
                     </tr>

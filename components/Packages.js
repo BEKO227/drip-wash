@@ -149,13 +149,19 @@ function SubForm({ plans, initial, user, onClose }) {
   );
 }
 
-// بعد تسجيل اشتراك جديد أو غسلة: عرض الفاتورة + واتساب
+// بعد تسجيل اشتراك جديد أو تجديد أو غسلة: عرض الفاتورة + واتساب
 function Notice({ r, onClose }) {
-  const isWash = r.sub.kind === 'wash';
+  const kind = r.sub.kind;
+  const isWash = kind === 'wash';
+  const head = isWash ? `🔖 اتسجلت غسلة من الباقة (${r.sub.planName})`
+    : kind === 'renew' ? `🔄 تم تجديد اشتراك ${r.sub.customerName} في ${r.sub.planName}`
+    : `✅ تم اشتراك ${r.sub.customerName} في ${r.sub.planName}`;
   return (
     <div className="mb-3 rounded-2xl border border-brand bg-card p-3">
-      <div className="text-sm font-bold">{isWash ? `🔖 اتسجلت غسلة من الباقة (${r.sub.planName})` : `تم تسجيل الاشتراك في ${r.sub.planName}`}</div>
-      {isWash && <div className="mt-1 text-xs text-mut">{washName(r.sub.washType)} {r.sub.washNo} من {r.sub.washOf} · {r.car} · {r.plate}</div>}
+      <div className="text-sm font-bold">{head}</div>
+      {isWash
+        ? <div className="mt-1 text-xs text-mut">{washName(r.sub.washType)} {r.sub.washNo} من {r.sub.washOf} · {r.car} · {r.plate}</div>
+        : <div className="mt-1 text-xs text-mut">فاتورة #{r.no} · {Number(r.price).toLocaleString('en-US')} جنيه · ينتهي {dateAr(r.sub.endDate)}</div>}
       <div className="mt-2 flex flex-wrap gap-2">
         <a className={btn} href={`/invoice/${r.token}`} target="_blank" rel="noreferrer">عرض الفاتورة</a>
         <a className={btn} href={waUrl(r.phone, isWash ? washMsg(r) : startMsg(r))} target="_blank" rel="noreferrer">إرسال واتساب</a>
@@ -169,6 +175,12 @@ function SubCard({ s, isPartner, user, onEdit, onWash }) {
   const st = statusOf(s);
   const days = Math.ceil((s.endDate - Date.now()) / DAY);
   const canWash = hasBuckets(s) && (st.key === 'active' || st.key === 'soon');
+
+  const renew = async () => {
+    if (!window.confirm('تجدد الاشتراك 30 يوم وتصفّر كل الغسلات؟ هتتعمل فاتورة تجديد بسعر الباقة.')) return;
+    try { onWash(await renewSub(s, user)); }
+    catch (e) { console.error(e); alert('حصل خطأ. راجع الصلاحيات (Rules) وجرّب تاني'); }
+  };
 
   const wash = async (b) => {
     if (!window.confirm(`تسجل ${washName(b.type)} لـ ${s.customerName}؟`)) return;
@@ -207,7 +219,7 @@ function SubCard({ s, isPartner, user, onEdit, onWash }) {
         ))}
         {isPartner && (
           <>
-            <button className={btn} disabled={!hasBuckets(s)} onClick={() => run(() => renewSub(s.id), 'تجدد الاشتراك 30 يوم وتصفّر كل الغسلات؟')}>تجديد</button>
+            <button className={btn} disabled={!hasBuckets(s)} onClick={renew}>تجديد</button>
             <button className={btn} onClick={onEdit}>تعديل</button>
             <button className={btn} onClick={() => run(() => setCancelled(s.id, !s.cancelled), s.cancelled ? null : 'تلغي الاشتراك؟')}>{s.cancelled ? 'تفعيل' : 'إلغاء'}</button>
             <button className={`${btn} text-red-400`} onClick={() => run(() => removeSub(s.id), 'تحذف الاشتراك نهائي؟')}>حذف</button>

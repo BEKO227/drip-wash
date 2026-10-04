@@ -83,12 +83,13 @@ export default function InvoicePage() {
 
   // فاتورة باقة: sub.kind = 'start' (فاتورة الاشتراك) أو 'wash' (غسلة من الباقة)
   const sub = inv.sub;
-  const isStart = sub?.kind === 'start';
+  const isRenew = sub?.kind === 'renew';
+  const isStart = sub?.kind === 'start' || isRenew; // فاتورة اشتراك أو تجديد
   const isWash = sub?.kind === 'wash';
   const rows = sub ? buckets(sub) : [];
   const all = rows.reduce((a, b) => a + b.total, 0);
   const usedAll = rows.reduce((a, b) => a + b.used, 0);
-  const title = isStart ? 'فاتورة اشتراك باقة' : isWash ? 'غسلة من باقة اشتراك' : 'فاتورة';
+  const title = isRenew ? 'فاتورة تجديد اشتراك' : isStart ? 'فاتورة اشتراك باقة' : isWash ? 'غسلة من باقة اشتراك' : 'فاتورة';
 
   return (
     <main className="mx-auto max-w-md p-4 print:max-w-none print:p-0">
@@ -115,6 +116,17 @@ export default function InvoicePage() {
 
         <div className="px-6 py-5">
           <h2 className="text-center text-lg font-bold mb-4">{title}</h2>
+
+          {/* تأكيد إن العميل اشترك */}
+          {isStart && (
+            <div className="mb-4 rounded-xl p-3 text-center" style={{ border: `2px solid ${ORANGE}`, backgroundColor: SOFT }}>
+              <div className="font-extrabold">{isRenew ? '🔄 تم تجديد الاشتراك' : '✅ تم الاشتراك بنجاح'}</div>
+              <div className="text-sm mt-1">
+                {isRenew ? 'جدّد' : 'اشترك'} العميل <b>{sub.customerName}</b> في باقة <b dir="ltr">{sub.planName}</b>
+              </div>
+              <div className="text-sm">لمدة 30 يوم، من {dstamp(sub.startDate)} إلى {dstamp(sub.endDate)}</div>
+            </div>
+          )}
 
           {/* ملحوظة واضحة إن الغسلة تابعة لباقة */}
           {isWash && (
