@@ -10,6 +10,12 @@ body {
   min-height: 100vh;
 }
 input:focus, button:focus-visible, a:focus-visible { outline: 2px solid #ff7a1a; outline-offset: 2px; }
+/* iOS Safari بيتجاهل width/min-width في input الـ date و month فبيطلعوا برا الكارت. ده بيحبسهم جوه عمودهم */
+input[type="date"], input[type="month"] {
+  -webkit-appearance: none; appearance: none;
+  display: block; min-width: 0; max-width: 100%; min-height: 2.5rem; text-align: center;
+}
+input[type="date"]::-webkit-date-and-time-value, input[type="month"]::-webkit-date-and-time-value { text-align: center; min-height: 1.2em; }
 @layer components {
   .card { @apply bg-card border border-line rounded-2xl p-4; }
   .field { @apply w-full bg-card2 border border-line rounded-xl text-lg px-3.5 py-3; }
