@@ -161,6 +161,13 @@ export default function InvoicePage() {
                 <span className="shrink-0">{isWash ? 'من الباقة' : `${num(it.p)} ج.م`}</span>
               </div>
             ))}
+            {/* الخصم: السعر قبل الخصم، النسبة، قيمة الخصم */}
+            {!sub && inv.discountPct > 0 && (
+              <div className="space-y-1 border-t border-black/20 py-2 text-sm">
+                <div className="flex justify-between"><span className="text-black/60">الإجمالي قبل الخصم</span><span>{num(inv.subtotal)} ج.م</span></div>
+                <div className="flex justify-between font-semibold" style={{ color: '#e86f00' }}><span>خصم {num(inv.discountPct)}%</span><span>- {num(inv.discountAmount)} ج.م</span></div>
+              </div>
+            )}
           </div>
 
           {/* رصيد الباقة لكل نوع غسلة */}
@@ -191,7 +198,7 @@ export default function InvoicePage() {
             className="mt-3 flex justify-between items-center rounded-xl px-4 py-3"
             style={{ backgroundColor: '#000000', color: '#ffffff' }}
           >
-            <span className="font-semibold" style={{ color: '#ffffff' }}>{isWash ? 'المطلوب دفعه' : 'الإجمالي'}</span>
+            <span className="font-semibold" style={{ color: '#ffffff' }}>{isWash ? 'المطلوب دفعه' : inv.discountPct > 0 ? 'الإجمالي بعد الخصم' : 'الإجمالي'}</span>
             <span className="text-xl font-bold" style={{ color: ORANGE }}>
               {isWash ? 'من الباقة' : `${num(inv.price)} ج.م`}
             </span>

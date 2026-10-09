@@ -14,9 +14,11 @@ const cleanPlate = (s) => s.trim().replace(/\s+/g, ' ');
 const normPlate = (s) =>
   (s || '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[أإآ]/g, 'ا').replace(/[\s-]/g, '').toLowerCase();
 const invoiceUrl = (token) => `${window.location.origin}/invoice/${token}`;
-const waLink = (phone, token, price) =>
-  `https://wa.me/20${phone.slice(1)}?text=${encodeURIComponent(
-    `شكراً لزيارتكم Drip Wash 🚗✨\nإجمالي فاتورتك ${price} جنيه.\nتقدر تشوف الفاتورة من هنا:\n${invoiceUrl(token)}`
+const waLink = (r) =>
+  `https://wa.me/20${r.phone.slice(1)}?text=${encodeURIComponent(
+    `شكراً لزيارتكم Drip Wash 🚗✨\n` +
+    (r.discountPct > 0 ? `الإجمالي قبل الخصم ${r.subtotal} جنيه، بعد خصم ${r.discountPct}% يبقى ${r.price} جنيه.\n` : `إجمالي فاتورتك ${r.price} جنيه.\n`) +
+    `تقدر تشوف الفاتورة من هنا:\n${invoiceUrl(r.token)}`
   )}`;
 
 export default function WorkerPage() {
@@ -32,6 +34,7 @@ function WorkerScreen() {
   const [phone, setPhone] = useState('');
   const [sel, setSel] = useState([]);
   const [chemPrice, setChemPrice] = useState('');
+  const [discount, setDiscount] = useState('');
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState(null); // آخر فاتورة اتسجلت (عادية أو من باقة)
@@ -44,6 +47,10 @@ function WorkerScreen() {
   const priceOf = (k) => (k === 'chem' ? chemP : db.prices[k] ?? 0);
   const nameOf = (k) => db.services.find((s) => s.k === k)?.n ?? k;
   const sum = sel.reduce((a, k) => a + priceOf(k), 0);
+  // الخصم للشريك بس: نسبة % بتتطبق على إجمالي الفاتورة
+  const isPartner = user.role === 'partner';
+  const pct = isPartner ? Math.min(99, Math.max(0, Number(discount) || 0)) : 0;
+  const after = pct > 0 ? Math.max(1, Math.round(sum * (1 - pct / 100))) : sum;
   const list = ordersOf(db, today);
   const ready = sel.length > 0 && car.trim() && cleanPlate(plate) && PHONE_RE.test(phone);
 
@@ -55,7 +62,7 @@ function WorkerScreen() {
 
   const pick = (k) => { const r = nextSel(sel, k); setSel(r.sel); setToast(r.msg || ''); };
 
-  const reset = () => { setCar(''); setPlate(''); setPhone(''); setSel([]); setChemPrice(''); };
+  const reset = () => { setCar(''); setPlate(''); setPhone(''); setSel([]); setChemPrice(''); setDiscount(''); };
 
   // kind = 'main' (كاملة أو VIP) أو 'free' (الخارجي المجاني)
   const washFromSub = async (b) => {
@@ -87,7 +94,7 @@ function WorkerScreen() {
     setBusy(true);
     try {
       const items = sel.map((k) => ({ k, n: nameOf(k), p: priceOf(k) }));
-      const r = await addOrder(name, items, user, phone, pl);
+      const r = await addOrder(name, items, user, phone, pl, pct);
       setLast({ ...r, car: name, plate: pl, phone });
       setToast('تم تسجيل ' + name);
       reset();
@@ -139,8 +146,21 @@ function WorkerScreen() {
             <input className="field" type="number" inputMode="numeric" value={chemPrice === '' ? db.prices.chem : chemPrice} onChange={(e) => setChemPrice(e.target.value)} />
           </>
         )}
+        {isPartner && (
+          <div className="mt-3 flex items-center gap-2">
+            <label htmlFor="disc" className="text-mut text-[13px] shrink-0">خصم %</label>
+            <input id="disc" className="field !py-2 !text-base" type="number" inputMode="decimal" min="0" max="99" placeholder="0"
+              value={discount} onChange={(e) => setDiscount(e.target.value)} />
+          </div>
+        )}
+        {pct > 0 && (
+          <>
+            <div className="flex justify-between items-center mt-3 text-mut text-sm"><span>قبل الخصم</span><span>{num(sum)} ج.م</span></div>
+            <div className="flex justify-between items-center text-ok text-sm"><span>خصم {num(pct)}%</span><span>- {num(sum - after)} ج.م</span></div>
+          </>
+        )}
         <div className="flex justify-between items-center mt-3 mb-1 text-mut">
-          <span>حساب العربية</span><strong className="text-brand2 text-[22px]">{num(sum)} ج.م</strong>
+          <span>{pct > 0 ? 'الحساب بعد الخصم' : 'حساب العربية'}</span><strong className="text-brand2 text-[22px]">{num(after)} ج.م</strong>
         </div>
         <button className="btn mt-1.5" disabled={!ready || busy} onClick={submit}>
           {busy ? 'جاري التسجيل...' : 'تسجيل العربية'}
@@ -162,9 +182,12 @@ function WorkerScreen() {
               {washName(last.sub.washType)} {num(last.sub.washNo)} من {num(last.sub.washOf)} · المتبقي: {buckets(last.sub).map((b) => `${TYPE_LABEL[b.type]} ${num(b.total - b.used)}`).join(' | ')}
             </div>
           )}
+          {!last.sub && last.discountPct > 0 && (
+            <div className="text-mut text-xs mt-1">قبل الخصم {num(last.subtotal)} ج.م · خصم {num(last.discountPct)}% (- {num(last.discountAmount)} ج.م)</div>
+          )}
           <div className="flex gap-2 mt-3">
             <a className="btn flex-1 text-center" href={`/invoice/${last.token}`} target="_blank" rel="noreferrer">عرض الفاتورة</a>
-            <a className="btn flex-1 text-center" href={last.sub ? waUrl(last.phone, washMsg(last)) : waLink(last.phone, last.token, last.price)} target="_blank" rel="noreferrer">إرسال واتساب</a>
+            <a className="btn flex-1 text-center" href={last.sub ? waUrl(last.phone, washMsg(last)) : waLink(last)} target="_blank" rel="noreferrer">إرسال واتساب</a>
           </div>
         </div>
       )}

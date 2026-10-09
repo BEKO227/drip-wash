@@ -2,14 +2,27 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const TABS = [['/worker', 'تسجيل'], ['/partners', 'النهاردة'], ['/partners/archive', 'الأرشيف'], ['/partners/reports', 'التقارير'], ['/partners/prices', 'الأسعار'], ['/partners/packages', 'الباقات']];
+// صفين من غير scroll: الصف الأول 5 تابات، والتاني 4 بياخدوا العرض كله
+const TABS = [
+  ['/worker', 'تسجيل'], ['/partners', 'النهاردة'], ['/partners/archive', 'الأرشيف'], ['/partners/reports', 'التقارير'], ['/partners/summary', 'الملخص'],
+  ['/partners/expenses', 'المصروفات'], ['/partners/staff', 'العمال'], ['/partners/packages', 'الباقات'], ['/partners/prices', 'الأسعار'],
+];
+
 export default function PartnerTabs() {
   const path = usePathname();
   return (
-    <div className="flex gap-1.5 mb-3 print:hidden">
+    <nav className="mb-3 flex flex-wrap gap-1.5 print:hidden">
       {TABS.map(([href, label]) => (
-        <Link key={href} href={href} className={`flex-1 text-center text-xs sm:text-sm py-2.5 rounded-xl border bg-card ${path === href ? 'text-brand2 border-brand' : 'text-mut border-line'}`}>{label}</Link>
+        <Link
+          key={href}
+          href={href}
+          aria-current={path === href ? 'page' : undefined}
+          style={{ flex: '1 1 calc(20% - 6px)' }}
+          className={`flex min-h-[40px] items-center justify-center whitespace-nowrap rounded-xl border px-1 text-center text-[11px] font-semibold leading-tight sm:text-sm ${path === href ? 'border-brand bg-card text-brand2' : 'border-line bg-card text-mut'}`}
+        >
+          {label}
+        </Link>
       ))}
-    </div>
+    </nav>
   );
 }

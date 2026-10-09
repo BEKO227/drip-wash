@@ -97,8 +97,8 @@ export default function ReportsPage() {
         <div className="card">
           {db.services.map((s) => {
             let c = 0, r = 0;
-            orders.forEach((o) => o.items.forEach((i) => { if (i.k === s.k) { c++; r += i.p; } }));
-            return <div key={s.k} className="row"><span>{s.n}</span><span>{num(c)} مرة · <b>{num(r)} ج.م</b></span></div>;
+            orders.forEach((o) => o.items.forEach((i) => { if (i.k === s.k) { c++; r += i.p * (1 - (o.discountPct || 0) / 100); } }));
+            return <div key={s.k} className="row"><span>{s.n}</span><span>{num(c)} مرة · <b>{num(Math.round(r))} ج.م</b></span></div>;
           })}
         </div>
 
